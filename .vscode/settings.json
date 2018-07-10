@@ -1,0 +1,14 @@
+{
+    "terminal.integrated.env.windows": {
+        "PATH": "C:\\Users\\anhnn\\.platformio\\penv\\Scripts;C:\\Users\\anhnn\\.platformio\\penv;C:\\Python27\\;C:\\Python27\\Scripts;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;C:\\ProgramData\\Oracle\\Java\\javapath;C:\\Program Files\\Docker\\Docker\\Resources\\bin;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;D:\\myPath;D:\\ESP8266\\Espressif\\xtensa-lx106-elf\\bin;D:\\ESP8266\\Espressif\\utils;C:\\Program Files (x86)\\Windows Kits\\8.1\\Windows Performance Toolkit\\;D:\\Setup\\Portable_app\\node-v6.10.3-win-x64;C:\\Program Files (x86)\\Skype\\Phone\\;C:\\Program Files (x86)\\Nordic Semiconductor\\nrf5x\\bin\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\anhnn\\AppData\\Local\\Programs\\Python\\Python35-32\\Scripts\\;C:\\Users\\anhnn\\AppData\\Local\\Programs\\Python\\Python35-32\\;C:\\Users\\anhnn\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Microsoft VS Code\\bin;D:\\Setup\\MinGW\\bin;;C:\\Python27\\;C:\\Python27\\Scripts;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;C:\\ProgramData\\Oracle\\Java\\javapath;C:\\Program Files\\Docker\\Docker\\Resources\\bin;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;D:\\myPath;D:\\ESP8266\\Espressif\\xtensa-lx106-elf\\bin;D:\\ESP8266\\Espressif\\utils;C:\\Program Files (x86)\\Windows Kits\\8.1\\Windows Performance Toolkit\\;D:\\Setup\\Portable_app\\node-v6.10.3-win-x64;C:\\Program Files (x86)\\Skype\\Phone\\;C:\\Program Files (x86)\\Nordic Semiconductor\\nrf5x\\bin\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\anhnn\\AppData\\Local\\Programs\\Python\\Python35-32\\Scripts\\;C:\\Users\\anhnn\\AppData\\Local\\Programs\\Python\\Python35-32\\;C:\\Users\\anhnn\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Microsoft VS Code\\bin;D:\\Setup\\MinGW\\bin;",
+        "PLATFORMIO_CALLER": "vscode"
+    },
+    "files.associations": {
+        "esp_system.h": "c",
+        "nrf24.h": "c",
+        "sdkconfig.h": "c",
+        "spi_master.h": "c",
+        "stdlib.h": "c",
+        "task.h": "c"
+    }
+}

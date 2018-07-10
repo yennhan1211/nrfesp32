@@ -1,0 +1,9 @@
+{
+    "name": "nrf24",
+    "export": {
+    "include":
+    [
+        "rf24/*.[ch]pp"
+    ]
+    }
+}
