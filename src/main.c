@@ -133,8 +133,8 @@ void wifi_init_softap()
 char recv_buf[256];
 
 void socket_server(void *ignore) {
-	fd_set readfds;
-	fd_set errfds;
+    fd_set readfds;
+    fd_set errfds;
     struct timeval select_timeout;
     struct timeval receiving_timeout;
     int flags = 0;
@@ -199,7 +199,7 @@ void socket_server(void *ignore) {
             FD_CLR( clientSock, &errfds);
             FD_SET( clientSock, &errfds);
             // Monitor fd
-            ret = select( clientSock , &readfds , NULL , &errfds , &select_timeout);
+            ret = select( clientSock + 1, &readfds , NULL , &errfds , &select_timeout);
 
             if(ret > 0) {
                 // Check fd error
@@ -208,7 +208,6 @@ void socket_server(void *ignore) {
                     close(clientSock);
                     break;
                 }
-                
 
                 // Reading data
                 if (FD_ISSET(clientSock, &errfds)) {
@@ -226,7 +225,7 @@ void socket_server(void *ignore) {
                 vTaskDelay(10 / portTICK_RATE_MS);
             }
 
-            // Something need to send out 
+            // Something need to send out
         }
 
         // Clean res
