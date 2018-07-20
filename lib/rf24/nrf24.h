@@ -13,7 +13,7 @@
 // nRF24L0 instruction definitions
 #define nRF24_CMD_R_REGISTER       (uint8_t)0x00 // Register read
 #define nRF24_CMD_W_REGISTER       (uint8_t)0x20 // Register write
-#define nRF24_CMD_R_RX_PAYLOAD_WID (uint8_t)0x60 // Read RX payload width    
+#define nRF24_CMD_R_RX_PAYLOAD_WID (uint8_t)0x60 // Read RX payload width
 #define nRF24_CMD_R_RX_PAYLOAD     (uint8_t)0x61 // Read RX payload
 #define nRF24_CMD_W_TX_PAYLOAD     (uint8_t)0xA0 // Write TX payload
 #define nRF24_CMD_W_ACK_PAYLOAD    (uint8_t)0xA8 // Write Ack Payload
@@ -257,12 +257,17 @@ void nRF24_WriteAckPayload(uint8_t pipe, uint8_t *pBuf, uint8_t len);
 
 nRF24_TXResult nRF24_TransmitPacket(uint8_t *pBuf, uint8_t length);
 
+void nRF24_CE_High(void);
+void nRF24_CE_Low(void);
+
 /**/
 void nRF24_enableDynamicPayloads(uint8_t pipe);
 void nRF24_disableDynamicPayloads(void);
 
 // #define nRF24_RX_ON()   nRF24_CE_H();
 // #define nRF24_RX_OFF()  nRF24_CE_L();
+
+// void nRF24_DumpConfig(void);
 
 #endif // __NRF24_H
 

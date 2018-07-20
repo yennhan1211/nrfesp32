@@ -9,6 +9,8 @@
         "sdkconfig.h": "c",
         "spi_master.h": "c",
         "stdlib.h": "c",
-        "task.h": "c"
+        "task.h": "c",
+        "freertos.h": "c",
+        "gpio.h": "c"
     }
 }
