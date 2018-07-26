@@ -28,6 +28,8 @@ void rfnw_task_start_up(void);
 
 bool rfnw_task_send_msg(nrf_send_pack_t* msg);
 
+void rfnw_prepare_pack(nrf_send_pack_t* pack,uint32_t master_id, uint32_t client_id, uint8_t type, uint8_t *pdata, uint8_t data_len);;
+
 uint8_t rfnw_calc_crc(uint8_t* data, uint8_t length);
 
 #endif

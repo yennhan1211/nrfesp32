@@ -20,7 +20,6 @@
 #define PIN_NUM_CE      17
 
 static xQueueHandle rfnw_send_queue = NULL;
-static xQueueHandle rfnw_recv_queue = NULL;
 
 // static uint8_t nRF24_payload[MAX_PAYLOAD_BUFFER][MAX_RF_PAYLOAD];
 static uint8_t nRF24_payload[MAX_RF_PAYLOAD];
@@ -55,7 +54,7 @@ static void rfnw_task_handler(void* argv)
           while (nRF24_GetStatus_RXFIFO() != nRF24_STATUS_RXFIFO_EMPTY)
           {
             // Get a payload from the transceiver
-            uint8_t pipe = nRF24_ReadPayload(nRF24_payload, &payload_length);
+            nRF24_ReadPayload(nRF24_payload, &payload_length);
             // Clear all pending IRQ flags
             nRF24_ClearIRQFlags();
           }
@@ -125,6 +124,7 @@ static void rfnw_process_send_data(void)
 
 bool rfnw_task_send_msg(nrf_send_pack_t* msg)
 {
+    if(rfnw_send_queue == NULL) return false;
     if (xQueueSend(rfnw_send_queue, msg, 10 / portTICK_RATE_MS) != pdTRUE) {
         ESP_LOGE(RFNW_TAG, "%s xQueue send failed", __func__);
         return false;
@@ -133,9 +133,41 @@ bool rfnw_task_send_msg(nrf_send_pack_t* msg)
     return true;
 }
 
+void rfnw_prepare_pack(nrf_send_pack_t* pack, uint32_t master_id, uint32_t client_id, uint8_t type, uint8_t *pdata, uint8_t data_len)
+{
+    // header 1len 4master 4client 1type (data_len bytes) 1crc
+    // 2 + 1+ 4 + 4+ 1 + data_len+ 1
+    pack->pack_len = 2 + 1 + 4 + 4 + 1 + data_len + 1;
+
+    pack->pack_payload[0] = 0xAA;
+    pack->pack_payload[1] = 0x55;
+
+    pack->pack_payload[2] = 1 + data_len; // 4 master + 4 client + 1 type + data_len
+
+    // 11223344 >> 44332211
+
+    pack->pack_payload[3] = (master_id >> 24) & 0xFF;
+    pack->pack_payload[4] = (master_id >> 16) & 0xFF;
+    pack->pack_payload[5] = (master_id >> 8) & 0xFF;
+    pack->pack_payload[6] = (master_id >> 0) & 0xFF;
+
+    pack->pack_payload[7] = (client_id >> 24) & 0xFF;
+    pack->pack_payload[8] = (client_id >> 16) & 0xFF;
+    pack->pack_payload[9] = (client_id >> 8) & 0xFF;
+    pack->pack_payload[10] = (client_id >> 0) & 0xFF;
+
+    pack->pack_payload[11] = type;
+
+    if (pdata != NULL)
+    {
+        memcpy(pack->pack_payload + 12, pdata, data_len);
+    }
+
+    pack->pack_payload[data_len + 12] = rfnw_calc_crc(pack->pack_payload + 2, pack->pack_payload[2] + 9);
+}
+
 static void rfnw_process_data(uint8_t* data, uint8_t length)
 {
-    uint8_t tmp_payload_len = 0;
     uint8_t* tmp_payload = NULL;
     uint8_t cmd_type = 0xFF;
     nrf_send_pack_t tmp;
@@ -152,7 +184,6 @@ static void rfnw_process_data(uint8_t* data, uint8_t length)
         {
 
             tmp_payload = data + 3;
-            tmp_payload_len = data[2];
             cmd_type = tmp_payload[8];
             switch(cmd_type)
             {
@@ -163,7 +194,7 @@ static void rfnw_process_data(uint8_t* data, uint8_t length)
                     tmp.pack_payload[2] = 2;
                     memcpy(tmp.pack_payload + 3, data + 3, 8);
                     tmp.pack_payload[11] = CMD_READ_CLIENT_ID_ACK;
-                    tmp.pack_payload[12] = 10; // 10s
+                    tmp.pack_payload[12] = 5; // 10s
                     tmp.pack_payload[13] = rfnw_calc_crc(tmp.pack_payload + 2, 11);
 
                     tmp.pack_len = 14;
@@ -186,7 +217,7 @@ static void rfnw_process_data(uint8_t* data, uint8_t length)
                 break;
 
                 case CMD_CONTROL | 0x80:
-                    // ESP_LOGI(RFNW_TAG, "CMD_CONTROL Client Id %d\n", );
+                    ESP_LOGI(RFNW_TAG, "CMD_CONTROL Client Id\n" );
                 break;
 
                 case CMD_READ_CLIENT_ID_ACK | 0x80:

@@ -10,6 +10,7 @@
 #include "esp_log.h"
 
 #include "server.h"
+#include "control.h"
 
 
 
@@ -20,7 +21,6 @@ static xQueueHandle server_rfms_queue = NULL;
 
 static void server_task_handler(void* argv);
 static void server_process_data(int s, uint8_t* data, uint8_t len);
-static void prepare_pack(nrf_send_pack_t* pack,uint32_t client_id, uint8_t type, uint8_t *pdata, uint8_t data_len);
 
 static uint8_t recv_buf[256];
 static uint8_t payload[128];
@@ -29,8 +29,9 @@ static uint8_t r_length = 0;
 static uint8_t r_length_count = 0;
 static uint8_t r_crc = 0;
 
-extern uint32_t g_master_id;
+extern app_context_t g_app_context;
 extern bool isControlByApp;
+extern volatile bool isConnected;
 
 void server_task_start_up(void)
 {
@@ -40,7 +41,7 @@ void server_task_start_up(void)
 }
 
 bool server_send_msg(nrf_send_pack_t* msg)
-{
+{   if(server_rfms_queue == NULL) return false;
     if (xQueueSend(server_rfms_queue, msg, 10 / portTICK_RATE_MS) != pdTRUE) {
         ESP_LOGE(SERVER_TAG, "%s xQueue send failed", __func__);
         return false;
@@ -49,32 +50,7 @@ bool server_send_msg(nrf_send_pack_t* msg)
     return true;
 }
 
-static void prepare_pack(nrf_send_pack_t* pack,uint32_t client_id, uint8_t type, uint8_t *pdata, uint8_t data_len)
-{
-    uint32_t dummy_client = client_id;
 
-    // 2header 1len 4master 4client 1type (data_len bytes) 1crc
-    // 2 + 1+ 4 + 4+ 1 + data_len+ 1
-    pack->pack_len = 2 + 1 + 4 + 4 + 1 + data_len + 1;
-
-    pack->pack_payload[0] = 0xAA;
-    pack->pack_payload[1] = 0x55;
-
-    pack->pack_payload[2] = 1 + data_len; // 4 master + 4 client + 1 type + data_len
-
-    memcpy(pack->pack_payload + 3, &g_master_id, 4);
-
-    memcpy(pack->pack_payload + 7, &dummy_client, 4);
-
-    pack->pack_payload[11] = type;
-
-    if (pdata != NULL)
-    {
-        memcpy(pack->pack_payload + 12, pdata, data_len);
-    }
-
-    pack->pack_payload[data_len + 12] = rfnw_calc_crc(pack->pack_payload + 2, pack->pack_payload[2] + 9);
-}
 
 static void server_process_data(int s,uint8_t* data, uint8_t len)
 {
@@ -84,10 +60,10 @@ static void server_process_data(int s,uint8_t* data, uint8_t len)
         switch(state)
         {
             case 0: if (data[i] == 0xAA) state++; break;
-            case 1: 
-                if (data[i] == 0x55) 
+            case 1:
+                if (data[i] == 0x55)
                 {
-                    state++; 
+                    state++;
                 } else {
                     ESP_LOGI(SERVER_TAG, "Expect next header byte 55\n");
                     state = 0;
@@ -107,22 +83,153 @@ static void server_process_data(int s,uint8_t* data, uint8_t len)
                     switch(payload[0])
                     {
                         case SCAN_ALL_CLIENT:
-                            prepare_pack(&tmp, 0, CMD_READ_CLIENT_ID, NULL, 0);
+                            ESP_LOGI(SERVER_TAG, "Scan client\n");
+                            isControlByApp = true;
+                            // send its own
+                            uint8_t count = 0;
+                            tmp.pack_payload[count++] = 0xAA;
+                            tmp.pack_payload[count++] = 0x55;
+                            tmp.pack_payload[count++] = 10;
+                            tmp.pack_payload[count++] = SCAN_ALL_CLIENT | 0x80;
+                            tmp.pack_payload[count++] = (g_app_context.g_master_id >> 24) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.g_master_id >> 16) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.g_master_id >> 8) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.g_master_id >> 0) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.light_context_list[0].client_id >> 24) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.light_context_list[0].client_id >> 16) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.light_context_list[0].client_id >> 8) & 0xFF;
+                            tmp.pack_payload[count++] = (g_app_context.light_context_list[0].client_id >> 0) & 0xFF;
+                            tmp.pack_payload[count++] =  0;
+                            tmp.pack_payload[count++] = rfnw_calc_crc(tmp.pack_payload + 2, tmp.pack_payload[2] +1);
+                            // tmp.pack_len = 14;
+                            write(s, tmp.pack_payload, count);
+
+                            rfnw_prepare_pack(&tmp,g_app_context.g_master_id, 0, CMD_READ_CLIENT_ID, NULL, 0);
                             rfnw_task_send_msg(&tmp);
                             break;
                         case SET_ORDER_ID_TO_CLIENT:
-                            prepare_pack(&tmp, *(uint32_t*)(payload + 1), CMD_CONFIG_ORDER, NULL, 0);
+                            // <1type> < 4 client id> <1 order id>
+                        {
+                            uint32_t tmpclid = (uint32_t)payload[1] << 24 | (uint32_t)payload[2] << 16 | (uint32_t)payload[3] << 8 | (uint32_t)payload[4];
+                            ESP_LOGI(SERVER_TAG, "Set order id for %x\n", tmpclid);
+                            rfnw_prepare_pack(&tmp, g_app_context.g_master_id, tmpclid, CMD_CONFIG_ORDER, payload + 5, 1);
                             rfnw_task_send_msg(&tmp);
+                            for(int i = 0; i < MAX_LIGHT; i++){
+                                if(g_app_context.light_context_list[i].order_id == payload[5]){
+                                    g_app_context.light_context_list[i].client_id = tmpclid;
+                                    break;
+                                }
+                            }
+                            uint8_t tmparr[16];
+                            tmparr[0] = 0xAA;
+                            tmparr[1] = 0x55;
+                            tmparr[2] = 6;
+                            memcpy(tmparr+ 3, payload, 6);
+                            tmparr[3] = SET_ORDER_ID_TO_CLIENT| 0x80;
+                            tmparr[9] = rfnw_calc_crc(tmparr+ 2, 7);
+                            write(s, tmparr, 10);
+                        }
                             break;
                         case CONTROL_BY_ORDER_ID:
-                            isControlByApp = true;
+                            // <1type> < 4 byte val>
+                            {
+                                ligh_control_master_out(payload[1]); // control master
+
+                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[1].client_id, CMD_CONFIG_ORDER, payload + 2, 4);
+                                rfnw_task_send_msg(&tmp);
+                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[2].client_id, CMD_CONFIG_ORDER, payload + 3, 4);
+                                rfnw_task_send_msg(&tmp);
+                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[3].client_id, CMD_CONFIG_ORDER, payload + 4, 4);
+                                rfnw_task_send_msg(&tmp);
+                                isControlByApp = true;
+                            }
+
                             break;
                         case SET_CONFIG:
-                            break;
+                        {   // fetch data
+                            // <1type>< 4 master id> < 4 client id> <1 order id> < 1b out order1><1b time 1>< 1b out order2><1b time 2>< 1b out order3><1b time 3>< 1b out order4><1b time 4>
+                            uint32_t tmpclid = (uint32_t)payload[5] << 24 | (uint32_t)payload[6] << 16 | (uint32_t)payload[7] << 8 | (uint32_t)payload[8];
+                            ESP_LOGI(SERVER_TAG, "Set config for client id: %x\n", (unsigned int)tmpclid);
+                            uint8_t tmporderid = payload[9];
+                            for(int i = 0; i < MAX_LIGHT; i++){
+                                if(g_app_context.light_context_list[i].order_id == tmporderid){
+                                    // g_app_context.light_context_list[i].client_id = tmpclid;
+                                    for(int j = 0; j < MAX_OUT; j++){
+                                        g_app_context.light_context_list[i].out[j].out_idx = payload[10 + j*2];
+                                        g_app_context.light_context_list[i].out[j].interval = payload[11 + j*2];
+                                        g_app_context.light_context_list[i].out[j].current_tick = payload[11 + j*2];
+                                    }
+                                }
+                            }
+                            uint8_t tmparr[32];
+                            tmparr[0] = 0xAA;
+                            tmparr[1] = 0x55;
+                            tmparr[2] = 1 + 4 + 4 + 1 + MAX_OUT*2; 
+                            tmparr[3] = SET_CONFIG | 0x80;
+                            for(int i = 0; i < MAX_LIGHT; i++){
+                                if(tmporderid == g_app_context.light_context_list[i].order_id) {
+                                tmparr[4] = (g_app_context.g_master_id >> 24) & 0xFF;
+                                tmparr[5] = (g_app_context.g_master_id >> 16) & 0xFF;
+                                tmparr[6] = (g_app_context.g_master_id >> 8) & 0xFF;
+                                tmparr[7] = (g_app_context.g_master_id >> 0) & 0xFF;
+                                tmparr[8] = (g_app_context.light_context_list[i].client_id >> 24) & 0xFF;
+                                tmparr[9] = (g_app_context.light_context_list[i].client_id >> 16) & 0xFF;
+                                tmparr[10] = (g_app_context.light_context_list[i].client_id >> 8) & 0xFF;
+                                tmparr[11] = (g_app_context.light_context_list[i].client_id >> 0) & 0xFF;
+                                tmparr[12] = g_app_context.light_context_list[i].order_id;
+                                for(int j = 0; j < MAX_OUT; j++) {
+                                    tmparr[13+j*2] = g_app_context.light_context_list[i].out[j].out_idx;
+                                    tmparr[14+j*2] = g_app_context.light_context_list[i].out[j].interval;
+                                }
+                                tmparr[13 + MAX_OUT*2] = rfnw_calc_crc(tmparr+2, tmparr[2] + 1);
+                                write(s, tmparr, tmparr[2] + 4);
+                                break;
+                                }
+                            }
+                            // call sync task
+                            ligh_control_sync_config();
+                        }
+                        break;
                         case READ_CONFIG:
-                            break;
+                        {
+                            ESP_LOGI(SERVER_TAG, "Read config \n");
+                            uint8_t tmparr[32];
+                            tmparr[0] = 0xAA;
+                            tmparr[1] = 0x55;
+                            tmparr[2] = 1 + 4 + 4 + 1 + MAX_OUT*2; 
+                            tmparr[3] = READ_CONFIG | 0x80;
+                            for(int i = 0; i < MAX_LIGHT; i++){
+                                tmparr[4] = (g_app_context.g_master_id >> 24) & 0xFF;
+                                tmparr[5] = (g_app_context.g_master_id >> 16) & 0xFF;
+                                tmparr[6] = (g_app_context.g_master_id >> 8) & 0xFF;
+                                tmparr[7] = (g_app_context.g_master_id >> 0) & 0xFF;
+                                tmparr[8] = (g_app_context.light_context_list[i].client_id >> 24) & 0xFF;
+                                tmparr[9] = (g_app_context.light_context_list[i].client_id >> 16) & 0xFF;
+                                tmparr[10] = (g_app_context.light_context_list[i].client_id >> 8) & 0xFF;
+                                tmparr[11] = (g_app_context.light_context_list[i].client_id >> 0) & 0xFF;
+                                tmparr[12] = g_app_context.light_context_list[i].order_id;
+                                for(int j = 0; j < MAX_OUT; j++) {
+                                    tmparr[13+j*2] = g_app_context.light_context_list[i].out[j].out_idx;
+                                    tmparr[14+j*2] = g_app_context.light_context_list[i].out[j].interval;
+                                }
+                                tmparr[13 + MAX_OUT*2] = rfnw_calc_crc(tmparr+2, tmparr[2] + 1);
+                                ESP_LOGI(SERVER_TAG, "Checksum %d \n", tmparr[12 + MAX_OUT*2]);
+                                write(s, tmparr, tmparr[2] + 4);
+                            }
+                        }
+                        break;
                         case OUT_CONTROL_CLIENT:
-                            isControlByApp = false;
+                            {
+                                ESP_LOGI(SERVER_TAG, "Out control \n");
+                                uint8_t tmparr[8];
+                                tmparr[0] = 0xAA;
+                                tmparr[1] = 0x55;
+                                tmparr[2] = 1;
+                                tmparr[3] = OUT_CONTROL_CLIENT | 0x80;
+                                tmparr[4] = rfnw_calc_crc(tmparr + 2, 2);
+                                write(s, tmparr, 5);
+                                isControlByApp = false;
+                            }
                             break;
                         default:
                             ESP_LOGI(SERVER_TAG, "Shouldn't be here: payload[0] = %d\n", payload[0]);
@@ -202,6 +309,12 @@ static void server_task_handler(void* argv)
             // Monitor fd
             ret = select( clientSock + 1, &readfds , NULL , &errfds , &select_timeout);
 
+            if(isConnected == false) {
+                ESP_LOGI(SERVER_TAG, "Client disconnected client socket %d. CLOSE IT", clientSock);
+                close(clientSock);
+                break;
+            }
+
             if(ret > 0) {
                 // Check fd error
                 if (FD_ISSET(clientSock, &errfds)) {
@@ -229,7 +342,7 @@ static void server_task_handler(void* argv)
                     }
                     else if(ret > 0) {
                         // process incoming data
-                        ESP_LOGI(SERVER_TAG, "Message: %s\n", recv_buf);
+                        // ESP_LOGI(SERVER_TAG, "Message: %s\n", recv_buf);
                         server_process_data(clientSock, recv_buf, ret);
                     }
                 }

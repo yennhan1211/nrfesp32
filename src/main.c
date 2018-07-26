@@ -23,6 +23,7 @@
 
 #include "rfnw.h"
 #include "server.h"
+#include "control.h"
 
 #define PIN_NUM_MISO    12
 #define PIN_NUM_MOSI    13
@@ -34,11 +35,13 @@
 // #define PIN_NUM_CLK     19
 // #define PIN_NUM_CS      22
 
-#define EXAMPLE_ESP_WIFI_SSID      "nrfesp32"
-#define EXAMPLE_ESP_WIFI_PASS      "12345678"
+#define EXAMPLE_ESP_WIFI_SSID      "dengiaothong"
+#define EXAMPLE_ESP_WIFI_PASS      "87654321"
 #define EXAMPLE_MAX_STA_CONN       2
 
 static const char *TAG = "nrfesp32";
+
+volatile bool isConnected = false;
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t wifi_event_group;
@@ -62,11 +65,13 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     //     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     //     break;
     case SYSTEM_EVENT_AP_STACONNECTED:
+        isConnected = true;
         ESP_LOGI(TAG, "station:"MACSTR" join, AID=%d",
                  MAC2STR(event->event_info.sta_connected.mac),
                  event->event_info.sta_connected.aid);
         break;
     case SYSTEM_EVENT_AP_STADISCONNECTED:
+        isConnected = false;
         ESP_LOGI(TAG, "station:"MACSTR"leave, AID=%d",
                  MAC2STR(event->event_info.sta_disconnected.mac),
                  event->event_info.sta_disconnected.aid);
@@ -116,7 +121,7 @@ void wifi_init_softap()
             .ssid_len = strlen(EXAMPLE_ESP_WIFI_SSID),
             .password = EXAMPLE_ESP_WIFI_PASS,
             .max_connection = EXAMPLE_MAX_STA_CONN,
-            .authmode = WIFI_AUTH_WPA_WPA2_PSK
+            .authmode = WIFI_AUTH_OPEN
         },
     };
     if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
@@ -125,6 +130,7 @@ void wifi_init_softap()
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "wifi_init_softap finished.SSID:%s password:%s",
@@ -163,28 +169,6 @@ void app_main()
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
     wifi_init_softap();
 
-    // // Init CE pin
-    // gpio_config_t io_conf;
-    // io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
-    // io_conf.mode = GPIO_MODE_OUTPUT;
-    // io_conf.pin_bit_mask = (1ULL << 17 | 1ULL << 16 | 1ULL << PIN_NUM_CS);
-    // // io_conf.pin_bit_mask = (1ULL << 17 | 1ULL << 16);
-    // io_conf.pull_down_en = 0;
-    // io_conf.pull_up_en = 1;
-    // gpio_config(&io_conf);
-
-    // // Initialize the SPI bus
-    // ret=spi_bus_initialize(HSPI_HOST, &buscfg, 0);
-    // ESP_ERROR_CHECK(ret);
-    // //Attach the NRF to the SPI bus
-    // ret=spi_bus_add_device(HSPI_HOST, &devcfg, &spi);
-    // ESP_ERROR_CHECK(ret)
-
-
-    // nRF24_Init(spi);
-
-    // printf("NRF check %d\n", nRF24_Check());
-
     /* Print chip information */
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
@@ -204,7 +188,7 @@ void app_main()
     //     vTaskDelay(1000 / portTICK_PERIOD_MS);
     // }
 
-    
+    light_control_task_start_up();
     rfnw_task_start_up();
     server_task_start_up();
 
