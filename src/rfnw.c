@@ -217,19 +217,19 @@ static void rfnw_process_data(uint8_t* data, uint8_t length)
                 break;
 
                 case CMD_CONTROL | 0x80:
-                    ESP_LOGI(RFNW_TAG, "CMD_CONTROL Client Id\n" );
+                    // ESP_LOGI(RFNW_TAG, "CMD_CONTROL Client Id\n" );
                 break;
 
                 case CMD_READ_CLIENT_ID_ACK | 0x80:
-                    ESP_LOGI(RFNW_TAG, "CMD_READ_CLIENT_ID_ACK\n");
+                    // ESP_LOGI(RFNW_TAG, "CMD_READ_CLIENT_ID_ACK\n");
                 break;
 
                 case CMD_CONFIG_ORDER | 0x80:
-                    ESP_LOGI(RFNW_TAG, "Config order id successfully\n");
+                    // ESP_LOGI(RFNW_TAG, "Config order id successfully\n");
                 break;
 
                 default:
-                    ESP_LOGI(RFNW_TAG, "Command type not supported\n");
+                    ESP_LOGI(RFNW_TAG, "Command type not supported %d\n", cmd_type);
                 break;
             }
         }
@@ -298,7 +298,7 @@ void rfnw_task_start_up(void)
 
     nRF24_Init(spi);
 
-     nRF24_CE_Low();
+    nRF24_CE_Low();
     nRF24_SetRFChannel(1);
     nRF24_SetTXPower(nRF24_TXPWR_0dBm);
     nRF24_SetDataRate(nRF24_DR_250kbps);
@@ -322,7 +322,7 @@ void rfnw_task_start_up(void)
     ESP_LOGI(RFNW_TAG,"NRF check %d\n", nRF24_Check());
 
     rfnw_send_queue = xQueueCreate(10, sizeof(nrf_send_pack_t));
-    xTaskCreate(rfnw_task_handler, "rfnw", 3072, NULL, configMAX_PRIORITIES - 2, NULL);
+    xTaskCreate(rfnw_task_handler, "rfnw", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
     return;
 }
 

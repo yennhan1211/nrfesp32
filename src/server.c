@@ -135,11 +135,11 @@ static void server_process_data(int s,uint8_t* data, uint8_t len)
                             {
                                 ligh_control_master_out(payload[1]); // control master
 
-                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[1].client_id, CMD_CONFIG_ORDER, payload + 2, 4);
+                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[1].client_id, CMD_CONTROL, payload + 1, 4);
                                 rfnw_task_send_msg(&tmp);
-                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[2].client_id, CMD_CONFIG_ORDER, payload + 3, 4);
+                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[2].client_id, CMD_CONTROL, payload + 1, 4);
                                 rfnw_task_send_msg(&tmp);
-                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[3].client_id, CMD_CONFIG_ORDER, payload + 4, 4);
+                                rfnw_prepare_pack(&tmp,  g_app_context.g_master_id, g_app_context.light_context_list[3].client_id, CMD_CONTROL, payload + 1, 4);
                                 rfnw_task_send_msg(&tmp);
                                 isControlByApp = true;
                             }
