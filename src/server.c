@@ -12,6 +12,7 @@
 #include "server.h"
 #include "control.h"
 
+#define MAX_CLIENT          5
 
 
 
@@ -28,6 +29,8 @@ static uint8_t state = 0;
 static uint8_t r_length = 0;
 static uint8_t r_length_count = 0;
 static uint8_t r_crc = 0;
+
+static int client_fds[MAX_CLIENT];
 
 extern app_context_t g_app_context;
 extern bool isControlByApp;
@@ -164,7 +167,7 @@ static void server_process_data(int s,uint8_t* data, uint8_t len)
                             uint8_t tmparr[32];
                             tmparr[0] = 0xAA;
                             tmparr[1] = 0x55;
-                            tmparr[2] = 1 + 4 + 4 + 1 + MAX_OUT*2; 
+                            tmparr[2] = 1 + 4 + 4 + 1 + MAX_OUT*2;
                             tmparr[3] = SET_CONFIG | 0x80;
                             for(int i = 0; i < MAX_LIGHT; i++){
                                 if(tmporderid == g_app_context.light_context_list[i].order_id) {
@@ -196,7 +199,7 @@ static void server_process_data(int s,uint8_t* data, uint8_t len)
                             uint8_t tmparr[32];
                             tmparr[0] = 0xAA;
                             tmparr[1] = 0x55;
-                            tmparr[2] = 1 + 4 + 4 + 1 + MAX_OUT*2; 
+                            tmparr[2] = 1 + 4 + 4 + 1 + MAX_OUT*2;
                             tmparr[3] = READ_CONFIG | 0x80;
                             for(int i = 0; i < MAX_LIGHT; i++){
                                 tmparr[4] = (g_app_context.g_master_id >> 24) & 0xFF;
@@ -250,15 +253,53 @@ static void server_process_data(int s,uint8_t* data, uint8_t len)
     }
 }
 
+static void build_fd_sets(fd_set *set, int server_sock, struct timeval *timeout, int *max_fd)
+{
+    int i;
+    int max = server_sock;
+    int tmp;
+
+    if (timeout) {
+        //set timeout 50ms
+        timeout->tv_sec = 0;
+        timeout->tv_usec = 50000;
+    }
+
+    // Set fd_set
+    FD_ZERO(set);
+    FD_SET(server_sock, set);
+
+    for (i = 0; i < MAX_CLIENT; ++i) {
+        tmp = client_fds[i];
+        if (tmp > 0) {
+            FD_SET(tmp, set);
+        }
+
+        if (tmp > max) {
+            max = tmp;
+        }
+    }
+
+    if (max_fd) {
+        *max_fd = max;
+    }
+}
+
 static void server_task_handler(void* argv)
 {
     fd_set readfds;
     fd_set errfds;
     int ret = 0;
+    int max_fd_no;
     struct sockaddr_in clientAddress;
     struct sockaddr_in serverAddress;
 
     ESP_LOGI(SERVER_TAG, "Enter socket server task\n");
+
+    for (int i = 0; i < MAX_CLIENT; ++i)
+    {
+        client_fds[i] = -1; // clear fd client
+    }
 
     // Create a socket that we will listen upon.
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -283,6 +324,25 @@ static void server_task_handler(void* argv)
     if (rc < 0) {
         ESP_LOGI(SERVER_TAG, "listen: %d %s", rc, strerror(errno));
         goto END;
+    }
+
+    for(;;) {
+        struct timeval timeout;
+
+        build_fd_sets(&readfds, sock, &timeout, &max_fd_no);
+        build_fd_sets(&readfds, sock, NULL, NULL);
+
+        ret = select( max_fd_no + 1 , &readfds , NULL , &errfds , &timeout);
+
+        if (ret < 0)
+        {
+            // return error
+            break;
+        }
+        else
+        {
+            //
+        }
     }
 
     while (1) {
